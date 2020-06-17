@@ -1,0 +1,143 @@
+---
+title: "Survival Analysis for Telecommunication Services Subscribers"
+author: "University of Miami | Mingjun Li"
+date: "2/22/2020"
+output: pdf_document
+---
+
+A telecommunications company is concerned about the number of customers leaving their landline business for cable competitors. Our goal is to help them understand who is leaving and ultimately propose a retention plan to decrease churn and improve revenues. 
+```{r}
+library(tidyr)
+library(dplyr)
+library(pscl)
+library(survival)
+
+#install.packages('survminer')
+library(survminer)
+
+#install.packages('rlist')
+library(rlist)
+
+library(ggpubr)
+library(magrittr)
+```
+
+```{r}
+churn <- read.csv('https://s3.amazonaws.com/douglas2/MAS646/telcoChurn.csv')%>%
+  mutate(
+    SeniorCitizen = factor(SeniorCitizen,levels=c(1,0)),
+    Churn = as.integer((Churn=='Yes')*1)
+  )
+```
+```{r}
+names(churn)
+```
+
+
+# Which kind of customer is the most easy to leave?
+
+##(use customer-based info: gender, age range, and if they have partners and dependents)
+
+##Draw KM curve by each group
+```{r}
+#Survminer includes a function surv_fit that acts as a wrapper around survfit. If you use surv_fit instead of survfit, the "call" of the returned object will include the whole data frame instead of just data = x. surv_fit works better when calling ggsurvplot inside a formula
+KMcurve <- function(d,nameVector,time,churn){
+  len=length(nameVector)
+  sub=d[nameVector]
+  # test if there is difference between groups
+  dif = lapply(sub, function(q) survdiff(Surv(tenure,Churn)~q,data=d))
+  s<-mapply(
+            function(group,colname) {
+              ggsurvplot(
+                         surv_fit(Surv(d$tenure,d$Churn)~group,data=d),
+                          data=d,legend.title = colname,font.x=10,font.y=10
+                               )}, 
+            group = sub, colname = names(sub)
+              )
+  plot_list=list()
+  for (i in 1:len){
+    plot_list = list.append(plot_list,s[,i]$plot)
+  }
+  
+  return (list(ggarrange(plotlist=plot_list,ncol=1,nrow=2),dif)) #R function must return a list if multiple return
+}
+```
+
+##Gender doesnt make any difference
+
+##Senior Citizen, No partner and No dependents are more likely to leave
+```{r}
+cInfo = names(churn)[2:5]
+KMcurve(churn,cInfo,'tenure','Churn')
+```
+
+##Phone service is not a determinant of leaving, all the other services have influnce.
+
+##Specifically, customers who doesn't sign up for internet service are most unlikely to stay.
+
+##For internet service, customers who use Fib will more likely to leave than using DSL
+
+##For all the other service, not using service will more likely to leave
+
+## 
+```{r}
+service = names(churn)[7:15]
+KMcurve(churn,service,'tenure','Churn')
+```
+
+##Sining for shorter contract will more likely to leave, monthly contract loses times than yearly contract.
+
+## No paperless billing is more likely to leave
+
+## Electronic check is more likely to leave compared with credit card, bank transfer and mailed check
+```{r}
+unique(churn$PaymentMethod)
+```
+
+```{r}
+#notice that charge is continuous variable
+account = names(churn)[16:18]
+KMcurve(churn,account,'tenure','Churn')
+```
+## In conclusion, our target customers are younger people with partners and dependents.
+
+## In order to retain customer, the overall strategy is to attract more signing up our services. Also, a save and convenient paying environment by credit card and bank transfer will help to retain customers.
+
+```{r}
+head(churn)
+```
+# Revenue
+## tenure is month unit
+
+## How much we earn from those without internet service
+```{r}
+inter <- tapply(churn$MonthlyCharges , churn$InternetService, mean)
+inter
+```
+```{r}
+km = survfit(Surv(tenure,Churn) ~ InternetService, data=churn)
+print(km, print.rmean = T, rmean=60)
+```
+```{r}
+c(10.9,10.4,11.4)*inter
+c(21.1,19.3,22.6)*inter
+c(49.9,41.3,55.6)*inter
+```
+
+
+
+## Monthly charge more and yearly charge less
+```{r}
+meanCharge = tapply(churn$MonthlyCharges , churn$Contract,mean)
+meanCharge
+```
+## retention rate in specific time range
+```{r}
+km = survfit(Surv(tenure,Churn) ~ Contract, data=churn)
+print(km, print.rmean = T, rmean=30)
+```
+
+
+
+
+
