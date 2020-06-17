@@ -1,4 +1,4 @@
-# survival-analysis-using-R
+# Surival-Analysis-Using-R
 
 The report answers the following questions by drawing the KM curves and revenue analysis:
 
